@@ -1,13 +1,18 @@
+import LogoutIcon from "@mui/icons-material/Logout";
 import MenuIcon from "@mui/icons-material/Menu";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
-import { AppBar, Avatar, Box, IconButton, Toolbar, Typography } from "@mui/material";
+import { AppBar, Avatar, Box, Button, IconButton, Toolbar, Tooltip, Typography } from "@mui/material";
 import { formatCurrentDate } from "../../utils/formatters";
 
 type TopbarProps = {
+  userEmail: string;
   onMenuClick: () => void;
+  onSignOut: () => void;
 };
 
-export function Topbar({ onMenuClick }: TopbarProps) {
+export function Topbar({ userEmail, onMenuClick, onSignOut }: TopbarProps) {
+  const avatarLetter = userEmail.trim().charAt(0).toUpperCase() || "U";
+
   return (
     <AppBar
       position="sticky"
@@ -30,7 +35,27 @@ export function Topbar({ onMenuClick }: TopbarProps) {
         <IconButton aria-label="Notificaciones">
           <NotificationsNoneIcon />
         </IconButton>
-        <Avatar sx={{ bgcolor: "secondary.main", fontWeight: 800 }}>M</Avatar>
+        <Tooltip title={userEmail}>
+          <Avatar sx={{ bgcolor: "secondary.main", fontWeight: 800 }}>{avatarLetter}</Avatar>
+        </Tooltip>
+        <Button
+          color="inherit"
+          variant="outlined"
+          startIcon={<LogoutIcon />}
+          onClick={onSignOut}
+          sx={{ display: { xs: "none", sm: "inline-flex" } }}
+        >
+          Cerrar sesion
+        </Button>
+        <Tooltip title="Cerrar sesion">
+          <IconButton
+            aria-label="Cerrar sesion"
+            onClick={onSignOut}
+            sx={{ display: { xs: "inline-flex", sm: "none" } }}
+          >
+            <LogoutIcon />
+          </IconButton>
+        </Tooltip>
       </Toolbar>
     </AppBar>
   );

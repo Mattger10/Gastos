@@ -9,10 +9,12 @@ const drawerWidth = 280;
 type DashboardLayoutProps = {
   children: React.ReactNode;
   selectedView: DashboardView;
+  userEmail: string;
+  onSignOut: () => void;
   onViewChange: (view: DashboardView) => void;
 };
 
-export function DashboardLayout({ children, selectedView, onViewChange }: DashboardLayoutProps) {
+export function DashboardLayout({ children, selectedView, userEmail, onSignOut, onViewChange }: DashboardLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const handleViewChange = (view: DashboardView) => {
     onViewChange(view);
@@ -57,7 +59,7 @@ export function DashboardLayout({ children, selectedView, onViewChange }: Dashbo
         </Drawer>
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Topbar onMenuClick={() => setMobileOpen(true)} />
+        <Topbar userEmail={userEmail} onMenuClick={() => setMobileOpen(true)} onSignOut={onSignOut} />
         <Box component="main" sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1480, mx: "auto" }}>
           {children}
         </Box>

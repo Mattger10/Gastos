@@ -41,7 +41,6 @@ import { GoalFormDialog, GoalFormInput } from "../components/goals/GoalFormDialo
 import { LoanFormDialog, LoanFormInput } from "../components/loans/LoanFormDialog";
 import { LoansTable } from "../components/loans/LoansTable";
 import { AccountsManager } from "../components/settings/AccountsManager";
-import { AuthPanel } from "../components/settings/AuthPanel";
 import { TransactionFormDialog, TransactionFormInput } from "../components/transactions/TransactionFormDialog";
 import { TransactionsTable } from "../components/transactions/TransactionsTable";
 import { useDashboardData } from "../hooks/useDashboardData";
@@ -554,7 +553,6 @@ export function DashboardPage({ selectedView }: DashboardPageProps) {
         {selectedView === "settings" ? (
           <Grid item xs={12}>
             <Stack spacing={2.5}>
-              <AuthPanel onAuthChange={reload} />
               <AccountsManager
                 accounts={accounts}
                 onCreate={handleAccountCreate}
