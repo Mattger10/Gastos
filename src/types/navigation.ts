@@ -1,1 +1,9 @@
-export type DashboardView = "dashboard" | "transactions" | "budgets" | "goals" | "loans" | "reports" | "settings";
+export type DashboardView =
+  | "dashboard"
+  | "transactions"
+  | "budgets"
+  | "goals"
+  | "installments"
+  | "loans"
+  | "reports"
+  | "settings";

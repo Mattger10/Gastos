@@ -1,5 +1,6 @@
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import AssessmentIcon from "@mui/icons-material/Assessment";
+import CreditCardIcon from "@mui/icons-material/CreditCard";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import FlagIcon from "@mui/icons-material/Flag";
 import HandshakeIcon from "@mui/icons-material/Handshake";
@@ -22,6 +23,7 @@ const navItems = [
   { label: "Movimientos", value: "transactions", icon: <ReceiptLongIcon /> },
   { label: "Presupuestos", value: "budgets", icon: <SavingsIcon /> },
   { label: "Objetivos", value: "goals", icon: <FlagIcon /> },
+  { label: "Cuotas", value: "installments", icon: <CreditCardIcon /> },
   { label: "Prestamos", value: "loans", icon: <HandshakeIcon /> },
   { label: "Reportes", value: "reports", icon: <AssessmentIcon /> },
   { label: "Configuracion", value: "settings", icon: <SettingsIcon /> },

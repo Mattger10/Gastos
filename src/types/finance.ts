@@ -80,6 +80,19 @@ export interface Loan {
   notes: string;
 }
 
+export interface CardInstallment {
+  id: string;
+  accountId: string | null;
+  cardName: string;
+  merchant: string;
+  totalAmount: number;
+  installments: number;
+  paidInstallments: number;
+  nextDue: string | null;
+  notes: string;
+  automaticDebit: boolean;
+}
+
 export interface DashboardMetric {
   id: string;
   title: string;
@@ -89,7 +102,15 @@ export interface DashboardMetric {
   color?: "primary" | "success" | "error" | "warning" | "info";
 }
 
-export type DashboardMetricGroup = "dashboard" | "transactions" | "budgets" | "goals" | "loans" | "reports" | "settings";
+export type DashboardMetricGroup =
+  | "dashboard"
+  | "transactions"
+  | "budgets"
+  | "goals"
+  | "installments"
+  | "loans"
+  | "reports"
+  | "settings";
 
 export interface DashboardData {
   accounts: Account[];
@@ -100,6 +121,7 @@ export interface DashboardData {
   transactions: Transaction[];
   budgets: BudgetItem[];
   financialGoals: FinancialGoal[];
+  cardInstallments: CardInstallment[];
   loans: Loan[];
   financialAlerts: FinancialAlert[];
   source: "supabase" | "empty";

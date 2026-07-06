@@ -38,6 +38,11 @@ import { EmptyState } from "../components/common/EmptyState";
 import { SectionHeader } from "../components/common/SectionHeader";
 import { FinancialGoals } from "../components/goals/FinancialGoals";
 import { GoalFormDialog, GoalFormInput } from "../components/goals/GoalFormDialog";
+import {
+  CardInstallmentFormDialog,
+  CardInstallmentFormInput,
+} from "../components/installments/CardInstallmentFormDialog";
+import { CardInstallmentsTable } from "../components/installments/CardInstallmentsTable";
 import { LoanFormDialog, LoanFormInput } from "../components/loans/LoanFormDialog";
 import { LoansTable } from "../components/loans/LoansTable";
 import { AccountsManager } from "../components/settings/AccountsManager";
@@ -46,6 +51,7 @@ import { TransactionsTable } from "../components/transactions/TransactionsTable"
 import { useDashboardData } from "../hooks/useDashboardData";
 import {
   Account,
+  CardInstallment,
   DashboardMetric,
   DashboardMetricGroup,
   FinancialGoal,
@@ -57,16 +63,21 @@ import { DashboardView } from "../types/navigation";
 import {
   AccountInput,
   createAccount,
+  createCardInstallment,
   createLoan,
   createSavingsGoal,
   createTransaction,
   deleteAccount,
+  deleteCardInstallment,
   deleteLoan,
   deleteSavingsGoal,
   deleteTransaction,
   LoanInput,
+  markCardInstallmentPaid,
+  markDueCardInstallmentsPaid,
   setManualBalance,
   updateAccount,
+  updateCardInstallment,
   updateLoan,
   updateSavingsGoal,
   updateTransaction,
@@ -92,6 +103,7 @@ const metricGroupByView: Record<DashboardView, DashboardMetricGroup> = {
   transactions: "transactions",
   budgets: "budgets",
   goals: "goals",
+  installments: "installments",
   loans: "loans",
   reports: "reports",
   settings: "settings",
@@ -102,6 +114,7 @@ const metricIconByGroup: Record<DashboardMetricGroup, React.ReactNode> = {
   transactions: <ReceiptLongIcon />,
   budgets: <PieChartIcon />,
   goals: <FlagIcon />,
+  installments: <CreditCardIcon />,
   loans: <HandshakeIcon />,
   reports: <AssessmentIcon />,
   settings: <CreditCardIcon />,
@@ -128,6 +141,10 @@ const viewTitle: Record<DashboardView, { title: string; subtitle: string }> = {
     title: "Objetivos",
     subtitle: "Metas de ahorro cargadas en Supabase.",
   },
+  installments: {
+    title: "Cuotas",
+    subtitle: "Compras financiadas con tarjeta y proximos vencimientos.",
+  },
   loans: {
     title: "Prestamos",
     subtitle: "Dinero prestado, devoluciones y vencimientos.",
@@ -153,6 +170,8 @@ export function DashboardPage({ selectedView }: DashboardPageProps) {
   const [editingGoal, setEditingGoal] = useState<FinancialGoal | null>(null);
   const [loanDialogOpen, setLoanDialogOpen] = useState(false);
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
+  const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false);
+  const [editingInstallment, setEditingInstallment] = useState<CardInstallment | null>(null);
   const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
   const [manualBalance, setManualBalanceValue] = useState("");
   const monthFilter = (
@@ -207,6 +226,7 @@ export function DashboardPage({ selectedView }: DashboardPageProps) {
     transactions,
     budgets,
     financialGoals,
+    cardInstallments,
     loans,
     financialAlerts,
     source,
@@ -272,6 +292,24 @@ export function DashboardPage({ selectedView }: DashboardPageProps) {
     });
   };
 
+  const handleInstallmentSubmit = async (input: CardInstallmentFormInput) => {
+    await runAction(async () => {
+      if (editingInstallment) {
+        await updateCardInstallment(editingInstallment.id, input);
+      } else {
+        await createCardInstallment(input);
+      }
+      setInstallmentDialogOpen(false);
+      setEditingInstallment(null);
+    });
+  };
+
+  const handleInstallmentPaid = (installment: CardInstallment) =>
+    runAction(() => markCardInstallmentPaid(installment.id, selectedMonth));
+
+  const handleInstallmentsMonthPaid = () =>
+    runAction(() => markDueCardInstallmentsPaid(selectedMonth));
+
   const handleAccountCreate = (input: AccountInput) => runAction(() => createAccount(input));
   const handleAccountUpdate = (id: string, input: AccountInput) => runAction(() => updateAccount(id, input));
   const handleAccountDelete = (id: string) =>
@@ -294,6 +332,11 @@ export function DashboardPage({ selectedView }: DashboardPageProps) {
   const openNewLoan = () => {
     setEditingLoan(null);
     setLoanDialogOpen(true);
+  };
+
+  const openNewInstallment = () => {
+    setEditingInstallment(null);
+    setInstallmentDialogOpen(true);
   };
 
   const openBalanceDialog = () => {
@@ -429,6 +472,27 @@ export function DashboardPage({ selectedView }: DashboardPageProps) {
       <EmptyState title="No hay prestamos" description="Carga prestamos para seguir saldos pendientes, devoluciones y vencimientos." />
     );
 
+  const renderInstallments = () =>
+    cardInstallments.length ? (
+      <CardInstallmentsTable
+        installments={cardInstallments}
+        onMarkPaid={handleInstallmentPaid}
+        onEdit={(installment) => {
+          setEditingInstallment(installment);
+          setInstallmentDialogOpen(true);
+        }}
+        onDelete={(installment) =>
+          runAction(async () => {
+            if (window.confirm("Eliminar esta compra en cuotas?")) {
+              await deleteCardInstallment(installment.id);
+            }
+          })
+        }
+      />
+    ) : (
+      <EmptyState title="No hay cuotas" description="Carga compras en card_installments para seguir saldos y vencimientos." />
+    );
+
   const renderAlerts = () =>
     financialAlerts.length ? (
       <FinancialAlerts alerts={financialAlerts} />
@@ -534,6 +598,26 @@ export function DashboardPage({ selectedView }: DashboardPageProps) {
           </Grid>
         ) : null}
 
+        {selectedView === "installments" ? (
+          <Grid item xs={12}>
+            <SectionHeader
+              title="Cuotas"
+              subtitle="Seguimiento de compras con tarjeta, cuotas pagadas y proximos vencimientos."
+              action={
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <Button variant="outlined" onClick={handleInstallmentsMonthPaid}>
+                    Pagar mes
+                  </Button>
+                  <Button startIcon={<AddIcon />} variant="contained" onClick={openNewInstallment}>
+                    Nuevo
+                  </Button>
+                </Stack>
+              }
+            />
+            {renderInstallments()}
+          </Grid>
+        ) : null}
+
         {selectedView === "dashboard" ? (
           <Grid item xs={12} lg={5}>
             <SectionHeader title="Alertas y recomendaciones" />
@@ -590,6 +674,16 @@ export function DashboardPage({ selectedView }: DashboardPageProps) {
           setEditingLoan(null);
         }}
         onSubmit={handleLoanSubmit}
+      />
+      <CardInstallmentFormDialog
+        open={installmentDialogOpen}
+        accounts={accounts}
+        installment={editingInstallment}
+        onClose={() => {
+          setInstallmentDialogOpen(false);
+          setEditingInstallment(null);
+        }}
+        onSubmit={handleInstallmentSubmit}
       />
       <Dialog open={balanceDialogOpen} onClose={() => setBalanceDialogOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>Editar balance actual</DialogTitle>

@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
   Account,
+  CardInstallment,
   DashboardData,
   DashboardMetric,
   DashboardMetricGroup,
@@ -57,6 +58,12 @@ const emptyMetrics: Record<DashboardMetricGroup, DashboardMetric[]> = {
     { id: "goals-current", title: "Ahorrado", value: 0, format: "currency", helperText: "en objetivos", color: "success" },
     { id: "goals-target", title: "Meta total", value: 0, format: "currency", helperText: "objetivo combinado", color: "info" },
     { id: "goals-progress", title: "Avance promedio", value: 0, format: "percent", helperText: "sobre meta total", color: "warning" },
+  ],
+  installments: [
+    { id: "installments-count", title: "Compras en cuotas", value: 0, format: "number", helperText: "activas", color: "primary" },
+    { id: "installments-pending", title: "Saldo pendiente", value: 0, format: "currency", helperText: "por pagar", color: "warning" },
+    { id: "next-installments", title: "Proximas cuotas", value: 0, format: "number", helperText: "vencen en 7 dias", color: "info" },
+    { id: "automatic-debits", title: "Debitos automaticos", value: 0, format: "number", helperText: "activos", color: "success" },
   ],
   loans: [
     { id: "loans-count", title: "Prestamos", value: 0, format: "number", helperText: "activos", color: "primary" },
@@ -122,6 +129,7 @@ const getEmptyDashboardData = (selectedMonth: string, message?: string): Dashboa
   transactions: [],
   budgets: [],
   financialGoals: [],
+  cardInstallments: [],
   loans: [],
   financialAlerts: [],
   source: "empty",
@@ -221,6 +229,28 @@ const buildLoans = (loans: LoanRow[]): Loan[] =>
       dueDate: loan.due_date,
       status: loan.status,
       notes: loan.notes,
+    }));
+
+const buildCardInstallments = (installments: CardInstallmentRow[]): CardInstallment[] =>
+  installments
+    .slice()
+    .sort((a, b) => {
+      if (!a.next_due && !b.next_due) return 0;
+      if (!a.next_due) return 1;
+      if (!b.next_due) return -1;
+      return dayjs(a.next_due).valueOf() - dayjs(b.next_due).valueOf();
+    })
+    .map((installment) => ({
+      id: installment.id,
+      accountId: installment.account_id,
+      cardName: installment.card_name,
+      merchant: installment.merchant,
+      totalAmount: toNumber(installment.total_amount),
+      installments: installment.installments,
+      paidInstallments: installment.paid_installments,
+      nextDue: installment.next_due,
+      notes: installment.notes ?? "",
+      automaticDebit: installment.automatic_debit,
     }));
 
 const buildTransactions = (transactions: TransactionRow[]): Transaction[] =>
@@ -415,6 +445,10 @@ const buildDashboardMetrics = (
   );
   const repaidLoanAmount = loans.reduce((total, loan) => total + toNumber(loan.amount_repaid), 0);
   const overdueLoansCount = loans.filter((loan) => loan.status === "overdue").length;
+  const upcomingInstallmentsCount = pendingInstallments.filter((installment) => {
+    return installment.next_due && dayjs(installment.next_due).diff(dayjs(), "day") <= 7;
+  }).length;
+  const automaticDebitsCount = pendingInstallments.filter((installment) => installment.automatic_debit).length;
   const activeMonths = monthlyFinance.filter((month) => month.income || month.expense || month.saving);
   const bestSavingMonth = monthlyFinance.reduce(
     (best, month) => (month.saving > best.saving ? month : best),
@@ -448,6 +482,12 @@ const buildDashboardMetrics = (
       { id: "goals-current", title: "Ahorrado", value: totalGoalCurrent, format: "currency", helperText: "en objetivos", color: "success" },
       { id: "goals-target", title: "Meta total", value: totalGoalTarget, format: "currency", helperText: "objetivo combinado", color: "info" },
       { id: "goals-progress", title: "Avance promedio", value: goalProgress, format: "percent", helperText: "sobre meta total", color: "warning" },
+    ],
+    installments: [
+      { id: "installments-count", title: "Compras en cuotas", value: pendingInstallments.length, format: "number", helperText: "con saldo pendiente", color: "primary" },
+      { id: "installments-pending", title: "Saldo pendiente", value: pendingInstallmentAmount, format: "currency", helperText: "total por pagar", color: "warning" },
+      { id: "next-installments", title: "Proximas cuotas", value: upcomingInstallmentsCount, format: "number", helperText: "vencen en 7 dias", color: "info" },
+      { id: "automatic-debits", title: "Debitos automaticos", value: automaticDebitsCount, format: "number", helperText: "sobre cuotas activas", color: "success" },
     ],
     loans: [
       { id: "loans-count", title: "Prestamos", value: pendingLoans.length, format: "number", helperText: "activos", color: "primary" },
@@ -503,7 +543,7 @@ export const loadDashboardData = async (selectedMonth = dayjs().format("YYYY-MM"
   const installments = installmentsResult.data ?? [];
   const loans = loansResult.data ?? [];
 
-  if (!accounts.length && !transactions.length && !goals.length) {
+  if (!accounts.length && !transactions.length && !goals.length && !installments.length && !loans.length) {
     return getEmptyDashboardData(selectedMonth, "Tu cuenta todavia no tiene datos financieros cargados.");
   }
 
@@ -527,6 +567,7 @@ export const loadDashboardData = async (selectedMonth = dayjs().format("YYYY-MM"
     transactions: buildTransactions(selectedMonthTransactions),
     budgets: [],
     financialGoals,
+    cardInstallments: buildCardInstallments(installments),
     loans: buildLoans(loans),
     financialAlerts,
     source: "supabase",
@@ -565,6 +606,18 @@ export type LoanInput = {
   dueDate: string | null;
   status: LoanRow["status"];
   notes: string;
+};
+
+export type CardInstallmentInput = {
+  accountId: string | null;
+  cardName: string;
+  merchant: string;
+  totalAmount: number;
+  installments: number;
+  paidInstallments: number;
+  nextDue: string | null;
+  notes: string;
+  automaticDebit: boolean;
 };
 
 export const createAccount = async (input: AccountInput) => {
@@ -733,6 +786,154 @@ export const deleteLoan = async (id: string) => {
   const { error } = await client.from("loans").delete().eq("id", id);
 
   if (error) throw new Error(error.message);
+};
+
+export const createCardInstallment = async (input: CardInstallmentInput) => {
+  const client = requireSupabase();
+  const userId = await getCurrentUserId();
+  const { error } = await client.from("card_installments").insert({
+    user_id: userId,
+    account_id: input.accountId,
+    card_name: input.cardName,
+    merchant: input.merchant,
+    total_amount: input.totalAmount,
+    installments: input.installments,
+    paid_installments: input.paidInstallments,
+    next_due: input.nextDue,
+    notes: input.notes,
+    automatic_debit: input.automaticDebit,
+  });
+
+  if (error) throw new Error(error.message);
+};
+
+export const updateCardInstallment = async (id: string, input: CardInstallmentInput) => {
+  const client = requireSupabase();
+  await getCurrentUserId();
+  const { error } = await client
+    .from("card_installments")
+    .update({
+      account_id: input.accountId,
+      card_name: input.cardName,
+      merchant: input.merchant,
+      total_amount: input.totalAmount,
+      installments: input.installments,
+      paid_installments: input.paidInstallments,
+      next_due: input.nextDue,
+      notes: input.notes,
+      automatic_debit: input.automaticDebit,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+};
+
+export const deleteCardInstallment = async (id: string) => {
+  const client = requireSupabase();
+  await getCurrentUserId();
+  const { error } = await client.from("card_installments").delete().eq("id", id);
+
+  if (error) throw new Error(error.message);
+};
+
+const getNextInstallmentDue = (nextDue: string | null, paidInstallments: number, installments: number) => {
+  if (paidInstallments >= installments) return null;
+
+  return dayjs(nextDue ?? dayjs().format("YYYY-MM-DD"))
+    .add(1, "month")
+    .format("YYYY-MM-DD");
+};
+
+const getInstallmentPaymentDate = (selectedMonth: string) => {
+  const month = dayjs(selectedMonth);
+
+  if (month.isSame(dayjs(), "month")) {
+    return dayjs().format("YYYY-MM-DD");
+  }
+
+  return month.startOf("month").format("YYYY-MM-DD");
+};
+
+const createInstallmentPaymentTransaction = async (
+  userId: string,
+  installment: CardInstallmentRow,
+  selectedMonth: string,
+) => {
+  const installmentValue = installment.installments ? toNumber(installment.total_amount) / installment.installments : 0;
+  const client = requireSupabase();
+  const { error } = await client.from("transactions").insert({
+    user_id: userId,
+    title: `Cuota - ${installment.merchant}`,
+    amount: installmentValue,
+    type: "expense",
+    category: "Tarjeta",
+    account_id: installment.account_id,
+    transaction_date: getInstallmentPaymentDate(selectedMonth),
+    notes: `Pago de cuota ${installment.paid_installments + 1}/${installment.installments} de ${installment.card_name}.`,
+  });
+
+  if (error) throw new Error(error.message);
+};
+
+export const markCardInstallmentPaid = async (id: string, selectedMonth: string) => {
+  const client = requireSupabase();
+  const userId = await getCurrentUserId();
+  const { data, error } = await client.from("card_installments").select("*").eq("id", id).single();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("No se encontro la compra en cuotas.");
+  if (data.paid_installments >= data.installments) return;
+
+  const paidInstallments = Math.min(data.paid_installments + 1, data.installments);
+  await createInstallmentPaymentTransaction(userId, data, selectedMonth);
+
+  const { error: updateError } = await client
+    .from("card_installments")
+    .update({
+      paid_installments: paidInstallments,
+      next_due: getNextInstallmentDue(data.next_due, paidInstallments, data.installments),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (updateError) throw new Error(updateError.message);
+};
+
+export const markDueCardInstallmentsPaid = async (selectedMonth: string) => {
+  const client = requireSupabase();
+  const userId = await getCurrentUserId();
+  const { end } = getMonthRange(selectedMonth);
+  const { data, error } = await client
+    .from("card_installments")
+    .select("*")
+    .eq("user_id", userId)
+    .lte("next_due", end.subtract(1, "day").format("YYYY-MM-DD"));
+
+  if (error) throw new Error(error.message);
+
+  const dueInstallments = (data ?? []).filter((installment) => {
+    return installment.paid_installments < installment.installments;
+  });
+
+  await Promise.all(
+    dueInstallments.map(async (installment) => {
+      const paidInstallments = Math.min(installment.paid_installments + 1, installment.installments);
+
+      await createInstallmentPaymentTransaction(userId, installment, selectedMonth);
+
+      const { error: updateError } = await client
+        .from("card_installments")
+        .update({
+          paid_installments: paidInstallments,
+          next_due: getNextInstallmentDue(installment.next_due, paidInstallments, installment.installments),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", installment.id);
+
+      if (updateError) throw new Error(updateError.message);
+    }),
+  );
 };
 
 export const setManualBalance = async (targetBalance: number) => {
